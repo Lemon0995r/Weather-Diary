@@ -8,14 +8,13 @@ class WeatherDiary:
     def __init__(self, root):
         self.root = root
         self.root.title("Weather Diary (Дневник погоды)")
-        self.root.geometry("600x500")
+        self.root.geometry("700x550")
         self.data_file = "weather_data.json"
         self.entries = self.load_data()
-
         self.setup_ui()
 
     def setup_ui(self):
-        # Панель ввода данных
+        # --- Панель ввода (без изменений) ---
         input_frame = tk.LabelFrame(self.root, text="Добавить новую запись", padx=10, pady=10)
         input_frame.pack(fill="x", padx=10, pady=5)
 
@@ -38,31 +37,37 @@ class WeatherDiary:
         btn_add = tk.Button(input_frame, text="Добавить запись", command=self.add_entry, bg="#4CAF50", fg="white")
         btn_add.grid(row=4, column=0, columnspan=2, pady=5, sticky="we")
 
-        # Панель фильтрации
+        # --- ОБНОВЛЕННАЯ Панель фильтрации ---
         filter_frame = tk.LabelFrame(self.root, text="Фильтрация", padx=10, pady=10)
         filter_frame.pack(fill="x", padx=10, pady=5)
 
-        tk.Label(filter_frame, text="Мин. темп:").grid(row=0, column=0)
+        # Фильтр по дате
+        tk.Label(filter_frame, text="Дата:").grid(row=0, column=0)
+        self.filter_date = tk.Entry(filter_frame, width=12)
+        self.filter_date.grid(row=0, column=1, padx=5)
+        
+        # Фильтр по температуре
+        tk.Label(filter_frame, text="Мин. темп:").grid(row=0, column=2)
         self.filter_temp = tk.Entry(filter_frame, width=10)
-        self.filter_temp.grid(row=0, column=1, padx=5)
+        self.filter_temp.grid(row=0, column=3, padx=5)
 
-        btn_filter = tk.Button(filter_frame, text="Применить фильтр", command=self.update_table)
-        btn_filter.grid(row=0, column=2, padx=5)
+        btn_filter = tk.Button(filter_frame, text="Применить", command=self.update_table)
+        btn_filter.grid(row=0, column=4, padx=5)
 
         btn_reset = tk.Button(filter_frame, text="Сброс", command=self.reset_filter)
-        btn_reset.grid(row=0, column=3, padx=5)
+        btn_reset.grid(row=0, column=5, padx=5)
 
-        # Таблица записей
+        # --- Таблица (без изменений) ---
         self.tree = ttk.Treeview(self.root, columns=("Date", "Temp", "Desc", "Rain"), show="headings")
         self.tree.heading("Date", text="Дата")
         self.tree.heading("Temp", text="Темп.")
         self.tree.heading("Desc", text="Описание")
         self.tree.heading("Rain", text="Осадки")
-        self.tree.column("Temp", width=70)
-        self.tree.column("Rain", width=70)
         self.tree.pack(fill="both", expand=True, padx=10, pady=10)
 
         self.update_table()
+
+    # Метод add_entry, save_data, load_data остаются прежними...
 
     def add_entry(self):
         date_str = self.date_entry.get().strip()
@@ -70,51 +75,41 @@ class WeatherDiary:
         desc_str = self.desc_entry.get().strip()
         has_rain = "Да" if self.rain_var.get() else "Нет"
 
-        # Валидация
         try:
             datetime.strptime(date_str, "%d.%m.%Y")
-        except ValueError:
-            return messagebox.showerror("Ошибка", "Неверный формат даты! Используйте ДД.ММ.ГГГГ")
-
-        try:
             temp_val = float(temp_str)
-        except ValueError:
-            return messagebox.showerror("Ошибка", "Температура должна быть числом!")
+            if not desc_str: raise ValueError("Пустое описание")
+        except ValueError as e:
+            return messagebox.showerror("Ошибка", f"Проверьте ввод: {e}")
 
-        if not desc_str:
-            return messagebox.showerror("Ошибка", "Описание не может быть пустым!")
-
-        # Сохранение
-        new_entry = {
-            "date": date_str,
-            "temp": temp_val,
-            "desc": desc_str,
-            "rain": has_rain
-        }
-        self.entries.append(new_entry)
+        self.entries.append({"date": date_str, "temp": temp_val, "desc": desc_str, "rain": has_rain})
         if self.save_data():
             self.update_table()
-            self.temp_entry.delete(0, tk.END)
-            self.desc_entry.delete(0, tk.END)
 
+    # --- ОБНОВЛЕННАЯ Логика фильтрации ---
     def update_table(self):
-        # Очистка таблицы
         for item in self.tree.get_children():
             self.tree.delete(item)
 
-        filter_val = self.filter_temp.get().strip()
+        f_date = self.filter_date.get().strip()
+        f_temp = self.filter_temp.get().strip()
         
         for entry in reversed(self.entries):
-            # Фильтрация по температуре (если введено значение)
+            # Фильтр по дате (вхождение строки, чтобы можно было искать по месяцу или году)
+            if f_date and f_date not in entry['date']:
+                continue
+                
+            # Фильтр по температуре
             try:
-                if filter_val and entry['temp'] < float(filter_val):
+                if f_temp and entry['temp'] < float(f_temp):
                     continue
             except ValueError:
-                pass # Если в фильтре не число, просто игнорируем его
+                pass
 
             self.tree.insert("", tk.END, values=(entry['date'], f"{entry['temp']}°C", entry['desc'], entry['rain']))
 
     def reset_filter(self):
+        self.filter_date.delete(0, tk.END)
         self.filter_temp.delete(0, tk.END)
         self.update_table()
 
@@ -124,17 +119,15 @@ class WeatherDiary:
                 json.dump(self.entries, f, ensure_ascii=False, indent=4)
             return True
         except Exception as e:
-            messagebox.showerror("Ошибка записи", f"Не удалось сохранить данные: {e}")
+            messagebox.showerror("Ошибка", str(e))
             return False
 
     def load_data(self):
-        if not os.path.exists(self.data_file):
-            return []
-        try:
+        if os.path.exists(self.data_file):
             with open(self.data_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return []
+                try: return json.load(f)
+                except: return []
+        return []
 
 if __name__ == "__main__":
     root = tk.Tk()
